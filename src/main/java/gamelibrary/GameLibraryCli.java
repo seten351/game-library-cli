@@ -1,6 +1,7 @@
 package gamelibrary;
 
 import java.io.PrintStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -9,23 +10,25 @@ import java.util.Scanner;
 
 /** メニューと入力・表示を担当します。ゲームの処理は入力方式に依存しません。 */
 public final class GameLibraryCli {
-    private final GameLibrary library;
+    private final GameLibraryService service;
     private final CliInput input;
     private final PrintStream output;
 
-    public GameLibraryCli(GameLibrary library, Scanner input, PrintStream output) {
-        this(library, new PlainCliInput(input, output), output);
+    public GameLibraryCli(GameLibraryService service, Scanner input, PrintStream output) {
+        this(service, new PlainCliInput(input, output), output);
     }
 
-    public GameLibraryCli(GameLibrary library, CliInput input, PrintStream output) {
-        this.library = Objects.requireNonNull(library);
+    public GameLibraryCli(GameLibraryService service, CliInput input, PrintStream output) {
+        this.service = Objects.requireNonNull(service);
         this.input = Objects.requireNonNull(input);
         this.output = Objects.requireNonNull(output);
     }
 
     public void run() {
-        output.println("ゲームライブラリ管理CLI v1.1");
-        output.println("データはメモリ内で管理され、終了すると消えます。");
+        output.println("ゲームライブラリ管理CLI v2.0");
+        output.println(service.isSavingEnabled()
+                ? "登録完了ごとにJSONへ自動保存します。"
+                : "保存無効：保存済みデータを読み込めていません。この実行中のデータだけを扱います。");
         while (true) {
             output.println("\n1. ゲームを登録");
             output.println("2. 一覧を表示");
@@ -39,6 +42,7 @@ public final class GameLibraryCli {
                     printInputEnd();
                     return;
                 case 0:
+                    printUnsavedWarning();
                     output.println("終了します。");
                     return;
                 case 1:
@@ -49,7 +53,7 @@ public final class GameLibraryCli {
                     break;
                 case 2:
                     output.println("\nゲーム一覧");
-                    printGames(library.getGames(), "ゲームはまだ登録されていません。");
+                    printGames(service.getGames(), "ゲームはまだ登録されていません。");
                     break;
                 case 3:
                     if (!searchGames()) {
@@ -82,8 +86,14 @@ public final class GameLibraryCli {
             return false;
         }
         // 全項目の入力が完了した時点で、初めて登録します。
-        library.addGame(new Game(title, platform, genre, playHours));
-        output.println("ゲームを登録しました。");
+        try {
+            boolean saved = service.registerGame(new Game(title, platform, genre, playHours));
+            output.println(saved ? "ゲームを登録しました。JSONへ保存しました。"
+                    : "ゲームを登録しました。保存無効のためメモリ内のみです。");
+        } catch (IOException exception) {
+            output.println("ゲームを登録しました。ただし未保存です。メモリ内の登録内容は保持しています。");
+            output.println(exception.getMessage());
+        }
         return true;
     }
 
@@ -93,7 +103,7 @@ public final class GameLibraryCli {
             return false;
         }
         output.println("\n検索結果");
-        printGames(library.searchByTitle(keyword), "該当するゲームはありません。");
+        printGames(service.searchByTitle(keyword), "該当するゲームはありません。");
         return true;
     }
 
@@ -187,6 +197,13 @@ public final class GameLibraryCli {
     }
 
     private void printInputEnd() {
+        printUnsavedWarning();
         output.println("\n入力が終了したため、終了します。");
+    }
+
+    private void printUnsavedWarning() {
+        if (service.hasUnsavedChanges()) {
+            output.println("未保存のデータがあります。終了すると未保存分は失われます。");
+        }
     }
 }

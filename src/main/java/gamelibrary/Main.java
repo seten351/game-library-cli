@@ -3,6 +3,7 @@ package gamelibrary;
 import java.io.IOError;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Scanner;
 
 import org.jline.terminal.Terminal;
@@ -14,16 +15,42 @@ public final class Main {
     }
 
     public static void main(String[] args) {
-        if (args.length > 1 || (args.length == 1 && !args[0].equals("--plain"))) {
-            System.err.println("使用方法: java -jar game-library-cli-1.1.0.jar [--plain]");
+        boolean plain = false;
+        Path dataPath;
+        try {
+            dataPath = Path.of(System.getProperty("user.home"), ".game-library-cli", "games.json");
+            boolean dataSpecified = false;
+            for (int i = 0; i < args.length; i++) {
+                if (args[i].equals("--plain") && !plain) {
+                    plain = true;
+                } else if (args[i].equals("--data") && !dataSpecified
+                        && i + 1 < args.length && !args[i + 1].startsWith("--")
+                        && !args[i + 1].isBlank()) {
+                    dataPath = Path.of(args[++i]);
+                    dataSpecified = true;
+                } else {
+                    throw new IllegalArgumentException("起動オプションを確認してください。");
+                }
+            }
+            dataPath = dataPath.toAbsolutePath().normalize();
+        } catch (IllegalArgumentException exception) {
+            System.err.println("使用方法: java -jar game-library-cli-2.0.0.jar [--plain] [--data <ファイルパス>]");
             System.exit(2);
             return;
         }
-        GameLibrary library = new GameLibrary();
-        Terminal terminal = createTerminal(args.length == 1);
+        GameLibraryService service = new GameLibraryService(new GameLibrary(), new JsonGameStore(dataPath));
+        System.out.println("保存先: " + dataPath);
+        try {
+            service.load();
+        } catch (IOException exception) {
+            System.err.println(exception.getMessage());
+            System.err.println("元ファイルを保護するため、この起動中は保存を無効にします。"
+                    + "復旧後、または別の--data保存先で再起動してください。");
+        }
+        Terminal terminal = createTerminal(plain);
         if (terminal != null) {
             try (terminal) {
-                new GameLibraryCli(library, new JLineCliInput(terminal), System.out).run();
+                new GameLibraryCli(service, new JLineCliInput(terminal), System.out).run();
             } catch (IOException | IOError exception) {
                 System.err.println("端末の入出力に失敗しました: " + exception.getMessage());
                 System.exit(1);
@@ -32,7 +59,7 @@ public final class Main {
         }
         System.out.println("番号入力モード（番号を入力してEnterで決定）");
         try (Scanner input = new Scanner(System.in, StandardCharsets.UTF_8)) {
-            GameLibraryCli cli = new GameLibraryCli(library, input, System.out);
+            GameLibraryCli cli = new GameLibraryCli(service, input, System.out);
             cli.run();
         }
     }

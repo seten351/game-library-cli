@@ -5,12 +5,17 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>gamelibrary</groupId>
     <artifactId>game-library-cli</artifactId>
-    <version>1.1.0</version>
+    <version>2.0.0</version>
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.14.0</version>
+        </dependency>
         <!-- Java 22向けFFMを含まない、Java 21で使用できる配布物です。 -->
         <dependency>
             <groupId>org.jline</groupId>
@@ -35,6 +40,12 @@
                     <classpathScope>test</classpathScope>
                 </configuration>
                 <executions>
+                    <execution>
+                        <id>persistence-test</id>
+                        <phase>test</phase>
+                        <goals><goal>java</goal></goals>
+                        <configuration><mainClass>gamelibrary.PersistenceTest</mainClass></configuration>
+                    </execution>
                     <execution>
                         <id>library-test</id>
                         <phase>test</phase>
