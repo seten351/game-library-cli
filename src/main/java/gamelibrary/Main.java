@@ -15,6 +15,11 @@ public final class Main {
     }
 
     public static void main(String[] args) {
+        // runが戻る時点で、端末・ロック・チャネルはすべて閉じています。
+        System.exit(run(args));
+    }
+
+    static int run(String[] args) {
         boolean plain = false;
         Path dataPath;
         try {
@@ -34,33 +39,44 @@ public final class Main {
             }
             dataPath = dataPath.toAbsolutePath().normalize();
         } catch (IllegalArgumentException exception) {
-            System.err.println("使用方法: java -jar game-library-cli-2.0.0.jar [--plain] [--data <ファイルパス>]");
-            System.exit(2);
-            return;
+            System.err.println("使用方法: java -jar game-library-cli-2.1.0.jar [--plain] [--data <ファイルパス>]");
+            return 2;
         }
-        GameLibraryService service = new GameLibraryService(new GameLibrary(), new JsonGameStore(dataPath));
-        System.out.println("保存先: " + dataPath);
         try {
-            service.load();
+            dataPath = GameFileLock.resolveDataPath(dataPath);
         } catch (IOException exception) {
             System.err.println(exception.getMessage());
-            System.err.println("元ファイルを保護するため、この起動中は保存を無効にします。"
-                    + "復旧後、または別の--data保存先で再起動してください。");
+            return 1;
         }
-        Terminal terminal = createTerminal(plain);
-        if (terminal != null) {
-            try (terminal) {
-                new GameLibraryCli(service, new JLineCliInput(terminal), System.out).run();
-            } catch (IOException | IOError exception) {
-                System.err.println("端末の入出力に失敗しました: " + exception.getMessage());
-                System.exit(1);
+        System.out.println("保存先: " + dataPath);
+        // 保存時だけではなく、古い一覧を読む前から終了まで排他利用します。
+        try (GameFileLock ignored = GameFileLock.acquire(dataPath)) {
+            GameLibraryService service = new GameLibraryService(new GameLibrary(), new JsonGameStore(dataPath));
+            try {
+                service.load();
+            } catch (IOException exception) {
+                System.err.println(exception.getMessage());
+                System.err.println("元ファイルを保護するため、この起動中は保存を無効にします。"
+                        + "復旧後、または別の--data保存先で再起動してください。");
             }
-            return;
-        }
-        System.out.println("番号入力モード（番号を入力してEnterで決定）");
-        try (Scanner input = new Scanner(System.in, StandardCharsets.UTF_8)) {
-            GameLibraryCli cli = new GameLibraryCli(service, input, System.out);
-            cli.run();
+            Terminal terminal = createTerminal(plain);
+            if (terminal != null) {
+                try (terminal) {
+                    new GameLibraryCli(service, new JLineCliInput(terminal), System.out).run();
+                }
+            } else {
+                System.out.println("番号入力モード（番号を入力してEnterで決定）");
+                try (Scanner input = new Scanner(System.in, StandardCharsets.UTF_8)) {
+                    new GameLibraryCli(service, input, System.out).run();
+                    if (input.ioException() != null) {
+                        throw input.ioException();
+                    }
+                }
+            }
+            return service.isSavingEnabled() && !service.hasUnsavedChanges() ? 0 : 1;
+        } catch (IOException | IOError exception) {
+            System.err.println("起動・入出力・終了処理に失敗しました: " + exception.getMessage());
+            return 1;
         }
     }
 

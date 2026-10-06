@@ -33,8 +33,16 @@ public final class GameLibraryService {
     public boolean registerGame(Game game) throws IOException {
         library.addGame(game);
         unsavedChanges = true;
+        return savePending();
+    }
+
+    /** 登録を追加せず、メモリ内の未保存分を含む全件の保存を再試行します。 */
+    public boolean savePending() throws IOException {
         if (!savingEnabled) {
             return false;
+        }
+        if (!unsavedChanges) {
+            return true;
         }
         store.save(library.getGames());
         unsavedChanges = false;

@@ -25,7 +25,7 @@ public final class GameLibraryCli {
     }
 
     public void run() {
-        output.println("ゲームライブラリ管理CLI v2.0");
+        output.println("ゲームライブラリ管理CLI v2.1");
         output.println(service.isSavingEnabled()
                 ? "登録完了ごとにJSONへ自動保存します。"
                 : "保存無効：保存済みデータを読み込めていません。この実行中のデータだけを扱います。");
@@ -33,18 +33,28 @@ public final class GameLibraryCli {
             output.println("\n1. ゲームを登録");
             output.println("2. 一覧を表示");
             output.println("3. タイトルで検索");
+            output.println("4. 保存を再試行");
             output.println("0. 終了");
-            int choice = readChoice(0, 3, List.of(
+            if (service.hasUnsavedChanges()) {
+                output.println("未保存のデータがあります。");
+            }
+            int choice = readChoice(0, 4, List.of(
                     new MenuOption(1, "ゲームを登録"), new MenuOption(2, "一覧を表示"),
-                    new MenuOption(3, "タイトルで検索"), new MenuOption(0, "終了")));
+                    new MenuOption(3, "タイトルで検索"), new MenuOption(4, "保存を再試行"),
+                    new MenuOption(0, "終了")));
             switch (choice) {
                 case -1:
                     printInputEnd();
                     return;
                 case 0:
-                    printUnsavedWarning();
-                    output.println("終了します。");
-                    return;
+                    if (!service.hasUnsavedChanges()) {
+                        output.println("終了します。");
+                        return;
+                    }
+                    if (confirmExit()) {
+                        return;
+                    }
+                    break;
                 case 1:
                     if (!registerGame()) {
                         printInputEnd();
@@ -60,6 +70,9 @@ public final class GameLibraryCli {
                         printInputEnd();
                         return;
                     }
+                    break;
+                case 4:
+                    retrySave();
                     break;
                 default:
                     throw new IllegalStateException("予期しないメニュー番号です。");
@@ -93,6 +106,50 @@ public final class GameLibraryCli {
         } catch (IOException exception) {
             output.println("ゲームを登録しました。ただし未保存です。メモリ内の登録内容は保持しています。");
             output.println(exception.getMessage());
+        }
+        return true;
+    }
+
+    private boolean retrySave() {
+        if (!service.isSavingEnabled()) {
+            output.println("保存無効のため再試行できません。元ファイルの復旧後、"
+                    + "または別の--data保存先で再起動してください。");
+            return false;
+        }
+        if (!service.hasUnsavedChanges()) {
+            output.println("すべて保存済みです。");
+            return true;
+        }
+        try {
+            service.savePending();
+            output.println("未保存のデータをJSONへ保存しました。");
+            return true;
+        } catch (IOException exception) {
+            output.println("保存を再試行しましたが、まだ未保存です。メモリ内の登録内容は保持しています。");
+            output.println(exception.getMessage());
+            return false;
+        }
+    }
+
+    private boolean confirmExit() {
+        printUnsavedWarning();
+        output.println("0. メニューに戻る");
+        output.println("1. 保存して終了");
+        output.println("2. 保存せず終了");
+        // Enterだけでは破棄しないよう、最初の選択肢を「戻る」にします。
+        int choice = readChoice(0, 2, List.of(new MenuOption(0, "メニューに戻る"),
+                new MenuOption(1, "保存して終了"), new MenuOption(2, "保存せず終了")));
+        if (choice == -1) {
+            printInputEnd();
+            return true;
+        }
+        if (choice == 0 || (choice == 1 && !retrySave())) {
+            return false;
+        }
+        if (choice == 2) {
+            output.println("保存せず終了します。未保存分は失われます。");
+        } else {
+            output.println("終了します。");
         }
         return true;
     }
