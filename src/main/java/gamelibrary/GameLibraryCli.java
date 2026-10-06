@@ -1,32 +1,39 @@
 package gamelibrary;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Scanner;
 
-/** 番号メニューと入力・表示を担当します。 */
+/** メニューと入力・表示を担当します。ゲームの処理は入力方式に依存しません。 */
 public final class GameLibraryCli {
     private final GameLibrary library;
-    private final Scanner input;
+    private final CliInput input;
     private final PrintStream output;
 
     public GameLibraryCli(GameLibrary library, Scanner input, PrintStream output) {
+        this(library, new PlainCliInput(input, output), output);
+    }
+
+    public GameLibraryCli(GameLibrary library, CliInput input, PrintStream output) {
         this.library = Objects.requireNonNull(library);
         this.input = Objects.requireNonNull(input);
         this.output = Objects.requireNonNull(output);
     }
 
     public void run() {
-        output.println("ゲームライブラリ管理CLI v1.0");
+        output.println("ゲームライブラリ管理CLI v1.1");
         output.println("データはメモリ内で管理され、終了すると消えます。");
         while (true) {
             output.println("\n1. ゲームを登録");
             output.println("2. 一覧を表示");
             output.println("3. タイトルで検索");
             output.println("0. 終了");
-            int choice = readChoice("番号を入力: ", 0, 3);
+            int choice = readChoice(0, 3, List.of(
+                    new MenuOption(1, "ゲームを登録"), new MenuOption(2, "一覧を表示"),
+                    new MenuOption(3, "タイトルで検索"), new MenuOption(0, "終了")));
             switch (choice) {
                 case -1:
                     printInputEnd();
@@ -92,32 +99,36 @@ public final class GameLibraryCli {
 
     private Platform readPlatform() {
         Platform[] platforms = Platform.values();
+        List<MenuOption> options = new ArrayList<>();
         output.println("プラットフォームを選択してください。");
         for (int i = 0; i < platforms.length; i++) {
             output.println((i + 1) + ". " + platforms[i].getDisplayName());
+            options.add(new MenuOption(i + 1, platforms[i].getDisplayName()));
         }
-        int choice = readChoice("番号を入力: ", 1, platforms.length);
+        int choice = readChoice(1, platforms.length, options);
         return choice == -1 ? null : platforms[choice - 1];
     }
 
     private Genre readGenre() {
         Genre[] genres = Genre.values();
+        List<MenuOption> options = new ArrayList<>();
         output.println("ジャンルを選択してください。");
         for (int i = 0; i < genres.length; i++) {
             output.println((i + 1) + ". " + genres[i].getDisplayName());
+            options.add(new MenuOption(i + 1, genres[i].getDisplayName()));
         }
-        int choice = readChoice("番号を入力: ", 1, genres.length);
+        int choice = readChoice(1, genres.length, options);
         return choice == -1 ? null : genres[choice - 1];
     }
 
-    private int readChoice(String prompt, int minimum, int maximum) {
+    private int readChoice(int minimum, int maximum, List<MenuOption> options) {
         while (true) {
-            String value = readLine(prompt);
+            String value = input.readSelection("番号を入力: ", options);
             if (value == null) {
                 return -1;
             }
             try {
-                int choice = Integer.parseInt(value);
+                int choice = Integer.parseInt(value.strip());
                 if (choice >= minimum && choice <= maximum) {
                     return choice;
                 }
@@ -157,12 +168,8 @@ public final class GameLibraryCli {
     }
 
     private String readLine(String prompt) {
-        output.print(prompt);
-        output.flush();
-        if (!input.hasNextLine()) {
-            return null;
-        }
-        return input.nextLine().strip();
+        String value = input.readLine(prompt);
+        return value == null ? null : value.strip();
     }
 
     private void printGames(List<Game> games, String emptyMessage) {
