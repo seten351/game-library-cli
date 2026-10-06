@@ -1,0 +1,30 @@
+# ビルド成果物
+/target/
+/out/
+*.class
+*.jar
+# only-script Wrapperを使用。将来のWrapper JARは必要なら追跡する
+!/.mvn/wrapper/maven-wrapper.jar
+# 実行時データ・練習用保存先
+.game-library-cli/
+games.json
+*.json.lock
+.game-library-*.tmp
+/data/
+/practice/
+/runtime/
+/backups/
+# 一時ファイル・ローカル設定
+__pycache__/
+*.py[cod]
+*.log
+*.tmp
+*.bak
+*.backup
+.DS_Store
+.idea/
+*.iml
+.vscode/
+.env
+.env.*
+!.env.example
